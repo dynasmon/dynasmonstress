@@ -61,7 +61,27 @@ useragents=["Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11) AppleWebKit/601.1.56 (KHTML, like Gecko) Version/9.0 Safari/601.1.56",
 			"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36",
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.7 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.7",
-			"Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko",]
+			"Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 11; SM-G996B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:89.0) Gecko/20100101 Firefox/89.0",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
+    		"Mozilla/5.0 (Macintosh; Intel Mac OS X 11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0",
+   		 	"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+    		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0",
+    		"Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1",
+    		"Mozilla/5.0 (Linux; Android 10; SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
+    		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+    		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36",
+    		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0",
+    		"Mozilla/5.0 (Macintosh; Intel Mac OS X 11_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36",
+    		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:92.0) Gecko/20100101 Firefox/92.0",
+    		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
+    		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15"]
 
 # Funções principais
 
@@ -159,15 +179,22 @@ def proxyget1():
     try:
         req = urllib.request.Request(urlproxy)
         req.add_header("User-Agent", random.choice(useragents))
-        sourcecode = urllib.request.urlopen(req)
+        sourcecode = urllib.request.urlopen(req).read()
         soup = BeautifulSoup(sourcecode, "html.parser")
         proxies = []
 
-        for proxy in soup.find_all('tr'):
-            ip = proxy.find_all('td')[0].get_text()
-            port = proxy.find_all('td')[1].get_text()
-            proxies.append(f"{ip}:{port}")
+        # Encontrar a tabela que contém os proxies
+        table = soup.find('table', {'class': 'table table-striped table-bordered'})
+        rows = table.find_all('tr')[1:]  # Pular o cabeçalho da tabela
 
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) > 1:  # Certificar que a linha tem pelo menos 2 colunas (IP e Port)
+                ip = cols[0].get_text()
+                port = cols[1].get_text()
+                proxies.append(f"{ip}:{port}")
+
+        # Salvar os proxies no arquivo especificado
         with open(config['proxy_list'], 'w') as out_file:
             out_file.write("\n".join(proxies))
 
@@ -182,12 +209,15 @@ def proxylist():
     try:
         with open(config['proxy_list'], 'r') as f:
             proxies = [line.strip() for line in f.readlines() if validate_proxy(line.strip())]
-        logging.info(f"{len(proxies)} proxies válidos carregados.")
+        if len(proxies) == 0:
+            logging.warning("Nenhum proxy válido foi encontrado na lista existente. Considere baixar uma nova lista.")
+            sys.exit(1)
+        else:
+            logging.info(f"{len(proxies)} proxies válidos carregados.")
+            numthreads()
     except FileNotFoundError:
         logging.error("Arquivo de proxies não encontrado.")
         sys.exit(1)
-
-    numthreads()
 
 def validate_proxy(proxy):
     try:
