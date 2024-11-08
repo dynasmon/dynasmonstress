@@ -1,0 +1,4 @@
+socks5
+bs4
+scapy
+pysocks
